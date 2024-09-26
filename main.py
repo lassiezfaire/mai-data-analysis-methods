@@ -11,15 +11,12 @@ import networkx as nx
 load_dotenv()
 
 
-def get_friends(user_id, access_token):
+def get_friends(user_id: str, access_token: str):
     """Возвращает список друзей пользователя ВКонтакте.
 
-    Args:
-        user_id (str): ID пользователя ВКонтакте.
-        access_token (str): Токен доступа пользователя.
-
-    Returns:
-        dict: Список словарей, где каждый словарь содержит информацию о друге
+    :param user_id: ID пользователя ВКонтакте.
+    :param access_token: Токен доступа пользователя.
+    :return: Список словарей, где каждый словарь содержит id друзей пользователя
     """
 
     url = 'https://api.vk.com/method/friends.get'
@@ -39,15 +36,13 @@ def get_friends(user_id, access_token):
     return data['response']
 
 
-def is_valid_json(filename):
+def is_valid_json(filename: str = 'friends.json'):
     """Проверяет, является ли файл настоящим JSON.
 
-    Args:
-      filename: Имя файла, который нужно проверить.
-
-    Returns:
-      True, если файл является корректным JSON-файлом, иначе False.
+    :param filename: Имя файла, который нужно проверить.
+    :return: True, если файл является корректным JSON-файлом, иначе False.
     """
+
     try:
         with open(filename, 'r') as f:
             json.load(f)
@@ -56,48 +51,62 @@ def is_valid_json(filename):
         return False
 
 
-friends_graph = {}
+def work_with_file(filename: str = 'friends.json'):
+    """Проверяет наличие файла с информацией о друзьях. Если такого нет, создаёт его и наполняет информацией
+
+    :param filename: Имя файла с информацией о друзьях. Требуется именно .json-файл установленного образца
+    :return: словарь, содержащий информацию из файла
+    """
+
+    friends_graph = {}
+
+    if os.path.exists(filename):
+        if is_valid_json(filename=filename):
+            print(f"Читаем информацию из существующего {filename}...")
+            # Читаем существующий файл с друзьями
+
+            with open(filename, 'r') as f:
+                friends_graph = json.load(f)
+                return friends_graph
+        else:
+            print(f"Файл {filename} повреждён. Удалите его и перезапустите скрипт")
+    else:
+        print(f"Создаём новый {filename}...")
+        # Получаем моих друзей
+
+        my_friends = get_friends(my_id, access_token)
+        friends_graph[my_id] = [str(user_id) for user_id in my_friends.get('items')]
+
+        friend_list = my_friends.get('items')
+
+        print("Всего найдено друзей:", my_friends.get('count'))
+
+        # Получаем друзей друзей
+        for user_id in tqdm(friend_list):
+            user_friends = get_friends(user_id, access_token)
+            friends_graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
+            time.sleep(1)
+
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(friends_graph, f, indent=4)
+
+        return friends_graph
+
 
 my_id = '711398942'
 access_token = os.getenv('TOKEN')
 
-if os.path.exists('friends.json'):
-    if is_valid_json(filename='friends.json'):
-        print("Читаем информацию из существующего friends.json...")
-        # Читаем существующий файл с друзьями
-
-        with open('friends.json', 'r') as f:
-            friends_graph = json.load(f)
-    else:
-        print("Файл friends.json. Удалите его и перезапустите скрипт")
-else:
-    print("Создаём новый friends.json...")
-    # Получаем моих друзей
-
-    my_friends = get_friends(my_id, access_token)
-    friends_graph[my_id] = [str(user_id) for user_id in my_friends.get('items')]
-
-    friend_list = my_friends.get('items')
-
-    print("Всего найдено друзей:", my_friends.get('count'))
-
-    # Получаем друзей друзей
-    for user_id in tqdm(friend_list):
-        user_friends = get_friends(user_id, access_token)
-        friends_graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
-        time.sleep(1)
-
-    with open('friends.json', 'w', encoding='utf-8') as f:
-        json.dump(friends_graph, f, indent=4)
+friends_graph = work_with_file()
 
 # Создаем направленный граф
 G = nx.from_dict_of_lists(friends_graph)
-
 print("Чертим граф...")
+
 # Рисуем граф
 plt.figure(figsize=(80, 80))
-pos = nx.spring_layout(G, k=0.1)  # Позиции вершин
+pos = nx.spring_layout(G, k=0.05)  # k можно менять для лучшего эффекта
 # pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
+
 nx.draw(G,
         pos,
         with_labels=True,
