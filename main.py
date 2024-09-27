@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import requests
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
 import networkx as nx
 
 load_dotenv()
@@ -93,7 +94,7 @@ def work_with_file(filename: str = 'friends.json'):
         return friends_graph
 
 
-my_id = '711398942'
+my_id = os.getenv('MY_ID')
 access_token = os.getenv('TOKEN')
 
 friends_graph = work_with_file()
@@ -104,7 +105,7 @@ print("Чертим граф...")
 
 # Рисуем граф
 plt.figure(figsize=(80, 80))
-pos = nx.spring_layout(G, k=0.05)  # k можно менять для лучшего эффекта
+pos = nx.spring_layout(G, k=0.1)  # k можно менять для лучшего эффекта
 # pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
 
 nx.draw(G,
@@ -116,5 +117,6 @@ nx.draw(G,
         font_weight='normal',
         arrows=False,
         width=0.5)
+
 plt.title("Граф друзей ВКонтакте")
 plt.show()
