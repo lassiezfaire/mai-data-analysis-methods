@@ -2,12 +2,11 @@ import json
 import os
 import time
 
-from dotenv import load_dotenv
-import requests
-from tqdm import tqdm
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
 import networkx as nx
+import requests
+from dotenv import load_dotenv
+from tqdm import tqdm
 
 load_dotenv()
 
@@ -104,9 +103,22 @@ friends_graph = work_with_file()
 
 # Создаем направленный граф
 G = nx.from_dict_of_lists(friends_graph)
+
+# Оцениваем граф по центральности
+betweenness_centrality = nx.betweenness_centrality(G)  # по посредничеству
+closeness_centrality = nx.closeness_centrality(G)  # по близости
+eigenvector_centrality = nx.eigenvector_centrality(G, max_iter=600)  # собственного вектора
+
+# Вывод результатов
+print("Центральность по посредничеству:", {key: round(value, 2) for key, value in betweenness_centrality.items()})
+print("Центральность по близости:", {key: round(value, 2) for key, value in closeness_centrality.items()})
+print("Центральность собственного вектора:", {key: round(value, 2) for key, value in eigenvector_centrality.items()})
+
+print(type(betweenness_centrality))
+
+# Чертим граф
 print("Чертим граф...")
 
-# Рисуем граф
 plt.figure(figsize=(80, 80))
 pos = nx.spring_layout(G, k=0.1)  # k можно менять для лучшего эффекта
 # pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
