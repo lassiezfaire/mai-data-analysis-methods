@@ -85,7 +85,10 @@ def work_with_file(filename: str = 'friends.json'):
         # Получаем друзей друзей
         for user_id in tqdm(friend_list):
             user_friends = get_friends(user_id, access_token)
-            friends_graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
+            if isinstance(user_friends, dict):
+                friends_graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
+            else:
+                print(f"Unexpected type for user_friends: {type(user_friends)}")
             time.sleep(1)
 
         with open(filename, 'w', encoding='utf-8') as f:
@@ -99,14 +102,16 @@ access_token = os.getenv('TOKEN')
 
 friends_graph = work_with_file()
 
-# Создаем направленный граф
 G = nx.from_dict_of_lists(friends_graph)
 print("Чертим граф...")
 
+start_time = time.time()
 # Рисуем граф
 plt.figure(figsize=(80, 80))
 pos = nx.spring_layout(G, k=0.1)  # k можно менять для лучшего эффекта
 # pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
+
+print("--- %s seconds ---" % (time.time() - start_time))
 
 nx.draw(G,
         pos,
@@ -120,3 +125,24 @@ nx.draw(G,
 
 plt.title("Граф друзей ВКонтакте")
 plt.show()
+
+# Create a graph
+#G = nx.Graph()
+
+# Add nodes
+G.add_nodes_from([1, 2, 3, 4, 5])
+
+# Add edges
+G.add_edges_from([(1, 2), (1, 3), (2, 3), (2, 4), (3, 4), (4, 5)])
+
+# Calculate betweenness centrality
+betweenness_centrality = nx.betweenness_centrality(G)
+print("Betweenness Centrality: ", betweenness_centrality)
+
+# Calculate closeness centrality
+closeness_centrality = nx.closeness_centrality(G)
+print("Closeness Centrality: ", closeness_centrality)
+
+# Calculate eigenvector centrality
+eigenvector_centrality = nx.eigenvector_centrality(G)
+print("Eigenvector Centrality: ", eigenvector_centrality)

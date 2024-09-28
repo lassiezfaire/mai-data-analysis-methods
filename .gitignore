@@ -1,3 +1,6 @@
 **/.idea/
 **/.env
 **/friends.json
+**/friends_not_my.json
+.venv/
+/pygraphviz/
