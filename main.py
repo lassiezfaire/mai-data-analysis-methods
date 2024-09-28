@@ -85,7 +85,10 @@ def work_with_file(filename: str = 'friends.json'):
         # Получаем друзей друзей
         for user_id in tqdm(friend_list):
             user_friends = get_friends(user_id, access_token)
-            friends_graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
+            try:
+                friends_graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
+            except:
+                friends_graph[str(user_id)] = ['']
             time.sleep(1)
 
         with open(filename, 'w', encoding='utf-8') as f:
