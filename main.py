@@ -4,6 +4,8 @@ import time
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import igraph as ig
+import pandas as pd
 import requests
 from dotenv import load_dotenv
 from tqdm import tqdm
@@ -13,6 +15,7 @@ load_dotenv()
 
 def get_zero_lvl_ids(filename: str = 'zero_lvl_ids.txt') -> list[str]:
     """
+    Загружает информацию о профилях, чьих друзей мы будем анализировать
 
     :param filename: имя файла, содержащего id уровня 0
     :return:
@@ -25,14 +28,16 @@ def get_zero_lvl_ids(filename: str = 'zero_lvl_ids.txt') -> list[str]:
     return zero_lvl_ids
 
 
-def get_first_second_lvl_ids(zero_lvl_ids: list[str], filename: str = 'friends.json'):
+def get_first_second_lvl_ids(zero_lvl_ids: list[str], filename: str = 'first_second_lvl_ids.json'):
     """Проверяет наличие файла с информацией о друзьях. Если такого нет, создаёт его и наполняет информацией
 
     :param filename: Имя файла с информацией о друзьях. Требуется именно .json-файл установленного образца
+    :param zero_lvl_ids: Список id группы
     :return: словарь, содержащий информацию из файла
     """
 
     graph = {}
+    zero_lvl_ids = [zero_lvl_id for zero_lvl_id in zero_lvl_ids if zero_lvl_id != '']
 
     if os.path.exists(filename):
         if is_valid_json(filename=filename):
@@ -48,23 +53,31 @@ def get_first_second_lvl_ids(zero_lvl_ids: list[str], filename: str = 'friends.j
         print(f"Создаём новый {filename}...")
         # Получаем моих друзей
 
-        print('Всего найдено id уровня 0', len(zero_lvl_ids) - 1)
+        print('Всего найдено id уровня 0:', len(zero_lvl_ids) - 1)
         for zero_lvl_id in zero_lvl_ids:
-            first_and_second_lvl_ids = get_friends(zero_lvl_id, access_token)
-            graph[zero_lvl_id] = [str(user_id) for user_id in first_and_second_lvl_ids.get('items')]
+            try:  # На случай невозможности получить список друзей (приватный либо удалённый профиль)
+                first_and_second_lvl_ids = get_friends(zero_lvl_id, access_token)
+                graph[zero_lvl_id] = [str(user_id) for user_id in first_and_second_lvl_ids.get('items')]
 
-            friend_list = first_and_second_lvl_ids.get('items')
+                friend_list = first_and_second_lvl_ids.get('items')
 
-            print("Всего найдено друзей:", first_and_second_lvl_ids.get('count'))
-
-            # Получаем друзей друзей
-            for user_id in tqdm(friend_list):
-                user_friends = get_friends(user_id, access_token)
-                try:
-                    graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
-                except:
-                    graph[str(user_id)] = ['']
+                print(
+                    f"Всего найдено id уровня 1 для пользователя {zero_lvl_id}: "
+                    f"{first_and_second_lvl_ids.get('count')}")
                 time.sleep(1)
+
+                # Получаем друзей друзей
+                progress_bar = tqdm(friend_list)
+                for user_id in progress_bar:
+                    user_friends = get_friends(user_id, access_token)
+                    try:
+                        graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
+                    except:
+                        graph[str(user_id)] = ['']
+                    progress_bar.set_description(f"Поиск id уровня 2 для пользователя {user_id}")
+                    time.sleep(0.1)
+            except:
+                graph[zero_lvl_id] = ['']
 
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(graph, f, indent=4)
@@ -90,14 +103,17 @@ def get_friends(user_id: str, access_token: str):
     response = requests.post(url, params=params)
     data = response.json()
 
+    error = 0
+
     if 'error' in data:
-        print(f"Error: {data['error']['error_msg']}")
-        return []
+        # print(f"Error: {data['error']['error_msg']}")
+        error += 1
+        return ['']
 
     return data['response']
 
 
-def is_valid_json(filename: str = 'friends.json'):
+def is_valid_json(filename: str = 'first_second_lvl_ids.json'):
     """Проверяет, является ли файл настоящим JSON.
 
     :param filename: Имя файла, который нужно проверить.
@@ -112,28 +128,77 @@ def is_valid_json(filename: str = 'friends.json'):
         return False
 
 
+def centralities_to_file(graph: nx.Graph, filename: str = 'centralities.json'):
+    """
+
+    :param graph: Граф, центральности узлов которого будут сохранены в файл
+    :param filename: Пусть к файлу, куда будет сохранена центральность графа
+    """
+
+    if os.path.exists(filename):
+        if is_valid_json(filename=filename):
+            print(f"Читаем информацию из существующего {filename}...")
+
+            # Читаем существующий файл центральностей
+            with open(filename, 'r') as f:
+                centralities = json.load(f)
+                return centralities
+        else:
+            print(f"Файл {filename} повреждён. Удалите его и перезапустите скрипт.")
+    else:
+        print(f"Считаем центральности графа друзей, вершин: {graph.number_of_nodes()}, "
+              f"рёбер: {graph.number_of_edges()}")
+        centralities = {}
+
+        ig_graph = ig.Graph.from_networkx(graph)  # Конвертируем в формат более быстрой библиотеки
+
+        progress_bar = tqdm(ig_graph.vs)
+        for node in progress_bar:
+            centralities[node["_nx_name"]] = []
+
+            betwenness = round(ig_graph.betweenness(vertices=[node.index], directed=False, cutoff=3)[0], 2)
+            centralities[node["_nx_name"]].append(betwenness)
+            closeness = round(ig_graph.closeness(vertices=[node.index])[0], 3)
+            centralities[node["_nx_name"]].append(closeness)
+            eigenvector = round(nx.eigenvector_centrality(graph, max_iter=600)[node["_nx_name"]], 3)
+            centralities[node["_nx_name"]].append(eigenvector)
+
+            progress_bar.set_description(f'Центральность для id {node["_nx_name"]}')
+
+        with open(filename, 'w') as f:
+            json.dump(centralities, f, indent=4)
+
+        return centralities
+
+
 access_token = os.getenv('TOKEN')
 zero_lvl_ids = get_zero_lvl_ids()
 
 first_second_lvl_ids = get_first_second_lvl_ids(zero_lvl_ids=zero_lvl_ids)
 
-# friends_graph = work_with_file()
-#
-# # Создаем направленный граф
-# G = nx.from_dict_of_lists(friends_graph)
-#
-# # Оцениваем граф по центральности
-# betweenness_centrality = nx.betweenness_centrality(G)  # по посредничеству
-# closeness_centrality = nx.closeness_centrality(G)  # по близости
-# eigenvector_centrality = nx.eigenvector_centrality(G, max_iter=600)  # собственного вектора
-#
-# # Вывод результатов
-# print("Центральность по посредничеству:", {key: round(value, 2) for key, value in betweenness_centrality.items()})
-# print("Центральность по близости:", {key: round(value, 2) for key, value in closeness_centrality.items()})
-# print("Центральность собственного вектора:", {key: round(value, 2) for key, value in eigenvector_centrality.items()})
-#
-# print(type(betweenness_centrality))
-#
+# Создаем граф
+G = nx.from_dict_of_lists(first_second_lvl_ids)
+
+# Считаем центральности
+centralities = centralities_to_file(graph=G)
+
+number_of_band_members = 1  # количество людей в команде, для которых будет оцениваться центральность
+band_centrality = {
+    'id': [],
+    'betweenness': [],
+    'closeness': [],
+    'eigenvector': []
+}  # центральности в банде
+
+for band_memeber in zero_lvl_ids[0:number_of_band_members]:
+    band_centrality['id'].append(band_memeber)
+    band_centrality['betweenness'].append(centralities[band_memeber][0])
+    band_centrality['closeness'].append(centralities[band_memeber][1])
+    band_centrality['eigenvector'].append(centralities[band_memeber][2])
+
+df = pd.DataFrame(band_centrality)
+print(df.to_string(index=False))
+
 # # Чертим граф
 # print("Чертим граф...")
 #
