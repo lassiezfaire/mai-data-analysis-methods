@@ -44,8 +44,8 @@ def centrality(graph: nx.Graph, filepath: str):
             centrality_dict[node["_nx_name"]].append(betweenness)
             closeness = round(ig_graph.closeness(vertices=[node.index])[0], 3)
             centrality_dict[node["_nx_name"]].append(closeness)
-            eigenvector = round(nx.eigenvector_centrality(graph, max_iter=600)[node["_nx_name"]], 3)
-            centrality_dict[node["_nx_name"]].append(eigenvector)
+            # eigenvector = round(nx.eigenvector_centrality(graph, max_iter=600)[node["_nx_name"]], 3)
+            # centrality_dict[node["_nx_name"]].append(eigenvector)
 
             progress_bar.set_description(f'Центральность для id {node["_nx_name"]}')
 
@@ -67,14 +67,14 @@ def band_centrality(band_members_number: int, zero_lvl_ids: list[str], centralit
         'id': [],
         'betweenness': [],
         'closeness': [],
-        'eigenvector': []
+        # 'eigenvector': []
     }
 
     for band_member in zero_lvl_ids[0:band_members_number]:
         band_centrality_dict['id'].append(band_member)
         band_centrality_dict['betweenness'].append(centrality_dict[band_member][0])
         band_centrality_dict['closeness'].append(centrality_dict[band_member][1])
-        band_centrality_dict['eigenvector'].append(centrality_dict[band_member][2])
+        # band_centrality_dict['eigenvector'].append(centrality_dict[band_member][2])
 
     df = pd.DataFrame(band_centrality_dict)
     print(df.to_string(index=False))
