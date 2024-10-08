@@ -29,12 +29,14 @@ def get_zero_lvl_ids(filepath: str) -> list[str]:
 
 def get_first_second_lvl_ids(zero_lvl_ids: list[str],
                              access_token: str,
-                             filepath: str):
+                             filepath: str,
+                             second_id_lvl: bool) -> dict:
     """Проверяет наличие файла с информацией о друзьях. Если такого нет, создаёт его и наполняет информацией
 
     :param zero_lvl_ids: Список id группы
     :param access_token: Токен доступа, получается указанным в документации образом
     :param filepath: Имя файла с информацией о друзьях. Требуется именно .json-файл установленного образца
+    :param second_id_lvl: True, если нужны id уровня 2 порядка, false если нет
     :return: словарь, содержащий информацию из файла
     """
 
@@ -69,15 +71,17 @@ def get_first_second_lvl_ids(zero_lvl_ids: list[str],
                 time.sleep(1)
 
                 # Получаем друзей друзей
-                progress_bar = tqdm(friend_list)
-                for user_id in progress_bar:
-                    user_friends = get_friends(user_id, access_token)
-                    try:
-                        graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
-                    except AttributeError:
-                        graph[str(user_id)] = ['']
-                    progress_bar.set_description(f"Поиск id уровня 2 для пользователя {user_id}")
-                    time.sleep(0.1)
+                if second_id_lvl:
+
+                    progress_bar = tqdm(friend_list)
+                    for user_id in progress_bar:
+                        user_friends = get_friends(user_id, access_token)
+                        try:
+                            graph[str(user_id)] = [str(user_id) for user_id in user_friends.get('items')]
+                        except AttributeError:
+                            graph[str(user_id)] = ['']
+                        progress_bar.set_description(f"Поиск id уровня 2 для пользователя {user_id}")
+                        time.sleep(0.1)
 
             except AttributeError:
                 graph[zero_lvl_id] = ['']

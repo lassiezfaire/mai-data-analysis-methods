@@ -1,0 +1,7 @@
+networkx~=3.4rc0
+python-dotenv~=1.0.1
+requests~=2.32.3
+tqdm~=4.66.5
+igraph~=0.11.6
+pandas~=2.2.3
+bokeh~=3.7.0.dev1
