@@ -1,112 +1,128 @@
+import random
+
 import gymnasium as gym
 import numpy as np
 
 
+def find_key_by_value(dictionary: dict, value):
+    keys = list(dictionary.keys())
+    values = list(dictionary.values())
+
+    try:
+        return keys[values.index(value)]
+    except ValueError:
+        return -1
+
+
 class SecretaryProblemEnv(gym.Env):
-    def __init__(self, num_candidates: int = 100):
-        super().__init__()
-        self.num_candidates = num_candidates
-        self.observation_space = gym.spaces.Discrete(num_candidates)
-        self.action_space = gym.spaces.Discrete(2)
+    def __init__(self, num_candidates=100):
+        self.num_candidates = num_candidates  # количество кандидатов
+        self.observation_space = gym.spaces.Discrete(num_candidates)  # наблюдения - это кандидаты
+        self.action_space = gym.spaces.Discrete(2)  # 2 действия - принять кандидата или отклонить
         self.reset()
 
+    def candidate_dictionary(self) -> dict:
+        # создаём список кандидатов
+        random_candidates = set()
+        # генерируем уникальных кандидатов до тех пор, пока их не наберётся num_candidates
+        while len(random_candidates) < self.num_candidates:
+            random_candidates.add(random.randint(10 ** 3, 10 ** 4 - 1))
+
+        random_candidates = list(random_candidates)
+        # сортируем кандидатов от лучшего к худшему
+        random_candidates.sort(reverse=True)
+        # генерируем их ранги
+        candidates_ranks = list(range(1, self.num_candidates + 1))
+        # объединяем кандидатов и ранги в словарь вида "ранг": "кандидат"
+        candidates = {}
+        for i in range(self.num_candidates):
+            candidates[candidates_ranks[i]] = random_candidates[i]
+
+        # перемешаем кандидатов в случайном порядке с сохранением рангов
+        random.shuffle(candidates_ranks)
+        shuffled_candidates = {}
+        for i in range(self.num_candidates):
+            shuffled_candidates[candidates_ranks[i]] = candidates[candidates_ranks[i]]
+
+        return shuffled_candidates
+
+    def _get_obs(self) -> dict:
+        return {
+            "current candidate": self.current_candidate,
+            "best candidate so far": self.best_candidate_so_far,
+            "rejected candidates": self.rejected_candidates
+        }
+
+    def _get_info(self) -> dict:
+        return {
+            "rank of current candidate": find_key_by_value(
+                dictionary=self.candidates,
+                value=self.current_candidate
+            ),
+            "rank of best candidate so far": find_key_by_value(
+                dictionary=self.candidates,
+                value=self.best_candidate_so_far
+            ),
+            "best candidate": self.best_candidate
+        }
+
     def reset(self, seed=None, options=None):
-        self.candidates = array_generator(length=self.num_candidates)
-        self.best_candidate_overall = np.max(self.candidates)
-        self.current_candidate = 0
-        self.best_candidate_so_far = None
-        self.done = False
-        return self.current_candidate
+        super().reset(seed=seed)
+
+        self.candidates = self.candidate_dictionary()  # список кандидатов
+        self.best_candidate = self.candidates[1]  # лучший кандидат (имеющий ранг 1)
+
+        self.current_step = 0  # порядковый номер текущего кандидата в списке кандидатов, обновляется в step()
+        self.current_candidate = list(self.candidates.values())[0]  # текущий кандидат
+        self.best_candidate_so_far = 0  # лучший из отвергнутых кандидатов (без ранга), обновляется в step()
+        self.rejected_candidates = []  # список отвергнутых кандидатов, пополняется в step()
+
+        observation = self._get_obs()
+        info = self._get_info()
+
+        return observation, info
 
     def step(self, action):
         reward = 0
-        if action == 1:  # Принять кандидата
-            self.best_candidate_so_far = self.candidates[self.current_candidate]
-            if self.best_candidate_so_far == self.best_candidate_overall:
-                reward = 100
+        self.current_candidate = list(self.candidates.values())[self.current_step]
+
+        if self.best_candidate_so_far < self.current_candidate:
+            self.best_candidate_so_far = self.current_candidate
+
+        if action == 1:  # выбираем кандидата
+            terminated = True  # останавливаем процесс
+            # назначаем высокую награду за выбор лучшего кандидата
+            reward = 100 if self.current_candidate == self.best_candidate else -1
+        else:  # отвергаем кандидата
+            if self.current_step == len(self.candidates.values()) - 1:  # если это последний кандидат - выбираем его
+                terminated = True
+                reward = 100 if self.current_candidate == self.best_candidate else -1
             else:
-                reward = 1
-            self.done = True
-        else:  # Отвергнуть кандидата
-            if self.current_candidate == self.num_candidates:
-                self.best_candidate_so_far = self.candidates[self.current_candidate]
-                if self.best_candidate_so_far == self.best_candidate_overall:
-                    reward = 100
-                else:
-                    reward = 1
-            self.current_candidate += 1
-        observation = self.current_candidate if not self.done else self.num_candidates
-        return observation, reward, self.done, {}
-    #
-    # def render(self, mode='human'):
-    #     print(f"Текущий кандидат: {self.current_candidate}")
-    #     if self.best_candidate_so_far is not None:
-    #         print(f"Лучший кандидат: {self.best_candidate_so_far}")
+                terminated = False
+                # добавляем пропущенного кандидата в список пропущенных кандидатов
+                self.rejected_candidates.append(self.current_candidate)
+                self.current_step += 1
+
+        observation = self._get_obs()
+        info = self._get_info()
+        truncated = False
+
+        return observation, reward, terminated, truncated, info
 
 
-def array_generator(length):
-    random_array = np.random.randint(10 ** 3, (10 ** 4) - 1, size=length)
-    unique_array = np.unique(random_array)
-    while len(unique_array) < length:
-        new_random_numbers = np.random.randint(10 ** 3, (10 ** 4) - 1, size=length - len(unique_array))
-        unique_array = np.unique(np.concatenate((unique_array, new_random_numbers)))
+env = SecretaryProblemEnv(10)
+observation, info = env.reset()
+print(env.candidates)
 
-    np.random.shuffle(unique_array)
+episode_over = False
+while not episode_over:
+    action = 0
+    observation, reward, terminated, truncated, info = env.step(action)
+    print(f"observation: {observation},"
+          f"reward: {reward},"
+          f"terminated: {terminated},"
+          f"truncated: {truncated}",
+          f"info: {info}"
+          )
 
-    return unique_array
-
-
-# def train_secretary_model_qlearning(env, num_episodes, learning_rate=0.1, discount_factor=0.95, epsilon=0.1):
-#     """
-#     Обучение модели для решения задачи о секретаре с использованием Q-learning.
-#
-#     Args:
-#         env: Объект окружения для задачи о секретаре.
-#         num_episodes: Количество эпизодов обучения.
-#         learning_rate: Скорость обучения (alpha).
-#         discount_factor: Фактор дисконтирования (gamma).
-#         epsilon: Вероятность случайного выбора действия (epsilon-жадность).
-#     """
-#
-#     # Инициализация Q-таблицы
-#     q_table = np.zeros((env.observation_space.n, env.action_space.n))
-#     print(q_table.size)
-#
-#     rewards = []
-#     for episode in range(num_episodes):
-#         observation = env.reset()
-#         done = False
-#         total_reward = 0
-#
-#         while not done:
-#             # Выбор действия (epsilon-жадность)
-#             if np.random.rand() < epsilon:
-#                 action = env.action_space.sample()  # Случайное действие
-#             else:
-#                 action = np.argmax(q_table[observation])  # Наилучшее действие
-#
-#             # Выполнение шага в окружении
-#             next_observation, reward, done, info = env.step(action)
-#             total_reward += reward
-#
-#             # Обновление Q-таблицы
-#             q_table[observation, action] = (1 - learning_rate) * q_table[observation, action] + \
-#                                            learning_rate * (
-#                                                    reward + discount_factor * np.max(q_table[next_observation - 1]))
-#
-#             observation = next_observation
-#
-#         rewards.append(total_reward)
-#
-#     # Вывод средней награды
-#     average_reward = np.mean(rewards)
-#     print(rewards)
-#     print(f"Средняя награда за {num_episodes} эпизодов: {average_reward:.4f}")
-
-
-# Пример использования:
-env = SecretaryProblemEnv(100)
-# train_secretary_model_qlearning(env, num_episodes=1000)
-print(f"Количество кандидатов: {len(env.candidates)}")
-print(f"Кандидаты:\n {env.candidates}")
-print(f"Лучший из кандидатов: {env.best_candidate_overall}")
+    episode_over = terminated
