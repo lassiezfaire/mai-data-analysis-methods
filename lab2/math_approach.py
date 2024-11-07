@@ -22,7 +22,9 @@ def classic_algorythm(n: int = 100):
         return candidates[-1]
 
 
-sim = np.array([classic_algorythm() for i in range(100000)])
+sim = [int(classic_algorythm()) for i in range(100000)]
+
+print(sim)
 
 plt.figure(figsize=(10, 6))
 plt.hist(sim, bins=100)

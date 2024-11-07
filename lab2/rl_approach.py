@@ -1,7 +1,11 @@
+from collections import defaultdict
 import random
+from typing import Any, Dict
 
 import gymnasium as gym
 import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 def find_key_by_value(dictionary: dict, value):
@@ -14,8 +18,12 @@ def find_key_by_value(dictionary: dict, value):
         return -1
 
 
-class SecretaryProblemEnv(gym.Env):
+class CandidateEnv(gym.Env):
     def __init__(self, num_candidates=100):
+        """
+
+        :param num_candidates: Количество кандидатов
+        """
         self.num_candidates = num_candidates  # количество кандидатов
         self.observation_space = gym.spaces.Discrete(num_candidates)  # наблюдения - это кандидаты
         self.action_space = gym.spaces.Discrete(2)  # 2 действия - принять кандидата или отклонить
@@ -110,19 +118,128 @@ class SecretaryProblemEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
 
-env = SecretaryProblemEnv(10)
+class SecretaryAgent:
+    def __init__(
+            self,
+            env: CandidateEnv,
+            learning_rate: float,
+            initial_epsilon: float,
+            epsilon_decay: float,
+            final_epsilon: float,
+            discount_factor: float = 0.95,
+    ):
+        self.env = env
+        self.q_values = defaultdict(lambda: np.zeros(env.action_space.n))
+
+        self.lr = learning_rate
+        self.discount_factor = discount_factor
+
+        self.epsilon = initial_epsilon
+        self.epsilon_decay = epsilon_decay
+        self.final_epsilon = final_epsilon
+
+        self.training_error = []
+
+    def get_action(self, obs: Dict[str, Any]) -> int:
+        hashible_obs = tuple(obs.values())[:2]
+
+        if np.random.random() < self.epsilon:
+            return 0 if np.random.random() < 20 / 21 else 1
+        else:
+            return int(np.argmax(self.q_values[hashible_obs]))
+
+    def update(
+            self,
+            obs: Dict[str, Any],
+            action: int,
+            reward: float,
+            terminated: bool,
+            next_obs: Dict[str, Any],
+    ):
+
+        hashible_obs = tuple(obs.values())[:2]
+        hashable_next_obs = tuple(next_obs.values())[:2]
+
+        """Updates the Q-value of an action."""
+        future_q_value = (not terminated) * np.max(self.q_values[hashable_next_obs])
+        temporal_difference = (
+                reward + self.discount_factor * future_q_value - self.q_values[hashible_obs][action]
+        )
+
+        self.q_values[hashible_obs][action] = (
+                self.q_values[hashible_obs][action] + self.lr * temporal_difference
+        )
+        self.training_error.append(temporal_difference)
+
+    def decay_epsilon(self):
+        self.epsilon = max(self.final_epsilon, self.epsilon - self.epsilon_decay)
+
+
+env = CandidateEnv(100)
 observation, info = env.reset()
-print(env.candidates)
 
-episode_over = False
-while not episode_over:
-    action = 0
-    observation, reward, terminated, truncated, info = env.step(action)
-    print(f"observation: {observation},"
-          f"reward: {reward},"
-          f"terminated: {terminated},"
-          f"truncated: {truncated}",
-          f"info: {info}"
-          )
+# hyperparameters
+learning_rate = 0.01
+n_episodes = 200_000
+start_epsilon = 1.0
+epsilon_decay = start_epsilon / (n_episodes / 2)  # reduce the exploration over time
+final_epsilon = 0.1
 
-    episode_over = terminated
+agent = SecretaryAgent(
+    env=env,
+    learning_rate=learning_rate,
+    initial_epsilon=start_epsilon,
+    epsilon_decay=epsilon_decay,
+    final_epsilon=final_epsilon,
+)
+
+first_rank = 0
+ranks_by_episode = {}
+
+for episode in tqdm(range(n_episodes)):
+    obs, info = env.reset()
+    done = False
+
+    # play one episode
+    while not done:
+        action = agent.get_action(obs)
+        next_obs, reward, terminated, truncated, info = env.step(action)
+
+        # update the agent
+        agent.update(obs, action, reward, terminated, next_obs)
+
+        # update if the environment is done and the current obs
+        done = terminated
+        obs = next_obs
+
+    if info['rank of current candidate'] == 1:
+        first_rank += 1
+
+    if episode % 10000 == 0:
+        ranks_by_episode[episode] = first_rank
+    agent.decay_epsilon()
+
+print(ranks_by_episode)
+# plt.figure(figsize=(10, 6))
+# plt.hist(ranks, bins=100)
+# plt.xticks(np.arange(0, 101, 10))
+# plt.ylim(0, 40000)
+# plt.xlabel('Chosen candidate')
+# plt.ylabel('frequency')
+plt.show()
+
+
+# print(env.candidates)
+#
+# episode_over = False
+# while not episode_over:
+#     action = 0
+#     observation, reward, terminated, truncated, info = env.step(action)
+#     print(f"observation: {observation}, "
+#           f"reward: {reward}, "
+#           f"terminated: {terminated}, "
+#           f"truncated: {truncated}, "
+#           f"info: {info}"
+#           )
+#
+#     episode_over = terminated
