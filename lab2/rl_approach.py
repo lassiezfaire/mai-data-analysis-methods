@@ -1,10 +1,10 @@
 from collections import defaultdict
 import random
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import gymnasium as gym
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from tqdm import tqdm
 
 
@@ -19,17 +19,24 @@ def find_key_by_value(dictionary: dict, value):
 
 
 class CandidateEnv(gym.Env):
+    """Среда обучения - мир, в котором будет действовать агент
+    (множество кандидатов в количестве num_candidates штук)."""
+
     def __init__(self, num_candidates=100):
         """
-
         :param num_candidates: Количество кандидатов
         """
+
         self.num_candidates = num_candidates  # количество кандидатов
         self.observation_space = gym.spaces.Discrete(num_candidates)  # наблюдения - это кандидаты
         self.action_space = gym.spaces.Discrete(2)  # 2 действия - принять кандидата или отклонить
         self.reset()
 
     def candidate_dictionary(self) -> dict:
+        """Генерируем словарь кандидатов (длина - num_candidates) вида "ранг": "качество", потом перемешиваем его
+
+        :return: словарь кандидатов
+        """
         # создаём список кандидатов
         random_candidates = set()
         # генерируем уникальных кандидатов до тех пор, пока их не наберётся num_candidates
@@ -37,11 +44,11 @@ class CandidateEnv(gym.Env):
             random_candidates.add(random.randint(10 ** 3, 10 ** 4 - 1))
 
         random_candidates = list(random_candidates)
-        # сортируем кандидатов от лучшего к худшему
+        # сортируем кандидатов от лучшего к худшему, чтобы рассчитать ранги
         random_candidates.sort(reverse=True)
         # генерируем их ранги
         candidates_ranks = list(range(1, self.num_candidates + 1))
-        # объединяем кандидатов и ранги в словарь вида "ранг": "кандидат"
+        # объединяем кандидатов и ранги в словарь кандидатов
         candidates = {}
         for i in range(self.num_candidates):
             candidates[candidates_ranks[i]] = random_candidates[i]
@@ -55,13 +62,23 @@ class CandidateEnv(gym.Env):
         return shuffled_candidates
 
     def _get_obs(self) -> dict:
+        """Преобразуем состояние среды (environment) в наблюдение (observation).
+        Эти данные подаются на обучение нейронной сети
+
+        :return: словарь-наблюдение
+        """
         return {
+            "number of candidates": self.num_candidates,
             "current candidate": self.current_candidate,
             "best candidate so far": self.best_candidate_so_far,
             "rejected candidates": self.rejected_candidates
         }
 
     def _get_info(self) -> dict:
+        """Диагностические данные, которые позволяют отслеживать работу нейронной сети
+
+        :return: словарь диагностической информации
+        """
         return {
             "rank of current candidate": find_key_by_value(
                 dictionary=self.candidates,
@@ -74,14 +91,21 @@ class CandidateEnv(gym.Env):
             "best candidate": self.best_candidate
         }
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed=None, options=None) -> Tuple[dict, dict]:
+        """Инициализирует новый эпизод для среды, случайным образом выбирая позиции агента и цели.
+
+        :param seed: Инициализирует генератор случайных чисел для детерминированного состояния.
+        :param options: Дополнительные параметры для настройки сброса.
+        :return: Кортеж из начального наблюдения и дополнительной информации.
+        """
+
         super().reset(seed=seed)
 
         self.candidates = self.candidate_dictionary()  # список кандидатов
         self.best_candidate = self.candidates[1]  # лучший кандидат (имеющий ранг 1)
 
         self.current_step = 0  # порядковый номер текущего кандидата в списке кандидатов, обновляется в step()
-        self.current_candidate = list(self.candidates.values())[0]  # текущий кандидат
+        self.current_candidate = 0  # list(self.candidates.values())[0]  # текущий кандидат
         self.best_candidate_so_far = 0  # лучший из отвергнутых кандидатов (без ранга), обновляется в step()
         self.rejected_candidates = []  # список отвергнутых кандидатов, пополняется в step()
 
@@ -90,14 +114,21 @@ class CandidateEnv(gym.Env):
 
         return observation, info
 
-    def step(self, action):
-        reward = 0
+    def step(self, action) -> Tuple[dict, int, bool, bool, dict]:
+        """Выполняет действие, вычисляет новое состояние среды и возвращает кортеж из следующего наблюдения,
+        вознаграждения, признаков завершения и дополнительной информации.
+
+        :param action: Действие, выполняемое агентом.
+        :return: Кортеж из следующего наблюдения, вознаграждения, признаков завершения и дополнительной информации.
+        """
+
+        reward = 5
         self.current_candidate = list(self.candidates.values())[self.current_step]
 
         if self.best_candidate_so_far < self.current_candidate:
             self.best_candidate_so_far = self.current_candidate
 
-        if action == 1:  # выбираем кандидата
+        if action == 0:  # выбираем кандидата
             terminated = True  # останавливаем процесс
             # назначаем высокую награду за выбор лучшего кандидата
             reward = 100 if self.current_candidate == self.best_candidate else -1
@@ -119,6 +150,8 @@ class CandidateEnv(gym.Env):
 
 
 class SecretaryAgent:
+    """Агент обучения с подкреплением - сущность, которая будет решать задачу и обучаться в процессе"""
+
     def __init__(
             self,
             env: CandidateEnv,
@@ -128,6 +161,17 @@ class SecretaryAgent:
             final_epsilon: float,
             discount_factor: float = 0.95,
     ):
+        """Инициализирует агента обучения с подкреплением с пустым словарем значений состояния-действия (q_values),
+        скоростью обучения и значением epsilon.
+
+        :param env: Среда обучения
+        :param learning_rate: Скорость обучения
+        :param initial_epsilon: Начальное значение эпсилон
+        :param epsilon_decay: Скорость уменьшения эпсилон
+        :param final_epsilon: Конечное значение эпсилон
+        :param discount_factor: Коэффициент дисконтирования для вычисления Q-значения
+        """
+
         self.env = env
         self.q_values = defaultdict(lambda: np.zeros(env.action_space.n))
 
@@ -141,10 +185,17 @@ class SecretaryAgent:
         self.training_error = []
 
     def get_action(self, obs: Dict[str, Any]) -> int:
-        hashible_obs = tuple(obs.values())[:2]
+        """Возвращает лучшее действие с вероятностью (1 - epsilon),
+        в противном случае — случайное действие с вероятностью эпсилон для обеспечения исследования.
+
+        :param obs: Текущее состояние (наблюдение).
+        :return: Действие из пространства действий.
+        """
+
+        hashible_obs = tuple(obs.values())[:3]
 
         if np.random.random() < self.epsilon:
-            return 0 if np.random.random() < 20 / 21 else 1
+            return self.env.action_space.sample()
         else:
             return int(np.argmax(self.q_values[hashible_obs]))
 
@@ -156,11 +207,18 @@ class SecretaryAgent:
             terminated: bool,
             next_obs: Dict[str, Any],
     ):
+        """Обновляет Q-таблицу после действия (action).
 
-        hashible_obs = tuple(obs.values())[:2]
-        hashable_next_obs = tuple(next_obs.values())[:2]
+        :param obs: Текущее состояние (наблюдение)
+        :param action: Выполненное действие
+        :param reward: Полученное вознаграждение
+        :param terminated: Флаг завершения эпизода
+        :param next_obs: Следующее состояние (наблюдение)
+        """
 
-        """Updates the Q-value of an action."""
+        hashible_obs = tuple(obs.values())[:3]
+        hashable_next_obs = tuple(next_obs.values())[:3]
+
         future_q_value = (not terminated) * np.max(self.q_values[hashable_next_obs])
         temporal_difference = (
                 reward + self.discount_factor * future_q_value - self.q_values[hashible_obs][action]
@@ -172,17 +230,17 @@ class SecretaryAgent:
         self.training_error.append(temporal_difference)
 
     def decay_epsilon(self):
+        # print(self.epsilon)
         self.epsilon = max(self.final_epsilon, self.epsilon - self.epsilon_decay)
 
 
 env = CandidateEnv(100)
-observation, info = env.reset()
 
-# hyperparameters
+# Гиперпараметры
 learning_rate = 0.01
 n_episodes = 200_000
 start_epsilon = 1.0
-epsilon_decay = start_epsilon / (n_episodes / 2)  # reduce the exploration over time
+epsilon_decay = start_epsilon / (n_episodes / 2)
 final_epsilon = 0.1
 
 agent = SecretaryAgent(
@@ -193,53 +251,33 @@ agent = SecretaryAgent(
     final_epsilon=final_epsilon,
 )
 
-first_rank = 0
-ranks_by_episode = {}
+ranks_of_chosen = []
 
 for episode in tqdm(range(n_episodes)):
     obs, info = env.reset()
     done = False
 
-    # play one episode
+    # оборот цикла - эпизод
     while not done:
         action = agent.get_action(obs)
         next_obs, reward, terminated, truncated, info = env.step(action)
 
-        # update the agent
+        # обновляем агента
         agent.update(obs, action, reward, terminated, next_obs)
 
-        # update if the environment is done and the current obs
+        # обновляем флаг завершения эпизода и текущее состояние
         done = terminated
         obs = next_obs
 
-    if info['rank of current candidate'] == 1:
-        first_rank += 1
-
-    if episode % 10000 == 0:
-        ranks_by_episode[episode] = first_rank
+    # print(len(obs["rejected candidates"]))
+    # print(info)
+    ranks_of_chosen.append(info["rank of current candidate"])
     agent.decay_epsilon()
 
-print(ranks_by_episode)
-# plt.figure(figsize=(10, 6))
-# plt.hist(ranks, bins=100)
-# plt.xticks(np.arange(0, 101, 10))
-# plt.ylim(0, 40000)
-# plt.xlabel('Chosen candidate')
-# plt.ylabel('frequency')
+plt.figure(figsize=(10, 6))
+plt.hist(ranks_of_chosen[n_episodes // 2:], bins=100)
+plt.xticks(np.arange(0, 101, 10))
+plt.ylim(0, 8000)
+plt.xlabel('Chosen candidate')
+plt.ylabel('frequency')
 plt.show()
-
-
-# print(env.candidates)
-#
-# episode_over = False
-# while not episode_over:
-#     action = 0
-#     observation, reward, terminated, truncated, info = env.step(action)
-#     print(f"observation: {observation}, "
-#           f"reward: {reward}, "
-#           f"terminated: {terminated}, "
-#           f"truncated: {truncated}, "
-#           f"info: {info}"
-#           )
-#
-#     episode_over = terminated
