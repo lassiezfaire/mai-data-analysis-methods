@@ -68,10 +68,12 @@ class CandidateEnv(gym.Env):
         :return: словарь-наблюдение
         """
         return {
-            "number of candidates": self.num_candidates,
-            "current candidate": self.current_candidate,
-            "best candidate so far": self.best_candidate_so_far,
-            "rejected candidates": self.rejected_candidates
+            "share of rejected": self.current_step / self.num_candidates,
+            "if best candidate so far": self.if_best_so_far,
+            # "number of candidates": self.num_candidates,
+            # "current candidate": self.current_candidate,
+            # "best candidate so far": self.best_candidate_so_far,
+            # "rejected candidates": self.rejected_candidates
         }
 
     def _get_info(self) -> dict:
@@ -105,6 +107,8 @@ class CandidateEnv(gym.Env):
         self.best_candidate = self.candidates[1]  # лучший кандидат (имеющий ранг 1)
 
         self.current_step = 0  # порядковый номер текущего кандидата в списке кандидатов, обновляется в step()
+        self.if_best_so_far = 0  # проверка, является ли текущий кандидат лучшим
+
         self.current_candidate = 0  # list(self.candidates.values())[0]  # текущий кандидат
         self.best_candidate_so_far = 0  # лучший из отвергнутых кандидатов (без ранга), обновляется в step()
         self.rejected_candidates = []  # список отвергнутых кандидатов, пополняется в step()
@@ -122,11 +126,14 @@ class CandidateEnv(gym.Env):
         :return: Кортеж из следующего наблюдения, вознаграждения, признаков завершения и дополнительной информации.
         """
 
-        reward = 5
+        reward = 0
         self.current_candidate = list(self.candidates.values())[self.current_step]
 
         if self.best_candidate_so_far < self.current_candidate:
             self.best_candidate_so_far = self.current_candidate
+
+        if self.current_candidate == self.best_candidate_so_far:
+            self.if_best_so_far = 1
 
         if action == 0:  # выбираем кандидата
             terminated = True  # останавливаем процесс
@@ -192,7 +199,7 @@ class SecretaryAgent:
         :return: Действие из пространства действий.
         """
 
-        hashible_obs = tuple(obs.values())[:3]
+        hashible_obs = tuple(obs.values())
 
         if np.random.random() < self.epsilon:
             return self.env.action_space.sample()
@@ -216,8 +223,8 @@ class SecretaryAgent:
         :param next_obs: Следующее состояние (наблюдение)
         """
 
-        hashible_obs = tuple(obs.values())[:3]
-        hashable_next_obs = tuple(next_obs.values())[:3]
+        hashible_obs = tuple(obs.values())
+        hashable_next_obs = tuple(next_obs.values())
 
         future_q_value = (not terminated) * np.max(self.q_values[hashable_next_obs])
         temporal_difference = (
@@ -230,7 +237,6 @@ class SecretaryAgent:
         self.training_error.append(temporal_difference)
 
     def decay_epsilon(self):
-        # print(self.epsilon)
         self.epsilon = max(self.final_epsilon, self.epsilon - self.epsilon_decay)
 
 
@@ -269,13 +275,11 @@ for episode in tqdm(range(n_episodes)):
         done = terminated
         obs = next_obs
 
-    # print(len(obs["rejected candidates"]))
-    # print(info)
     ranks_of_chosen.append(info["rank of current candidate"])
     agent.decay_epsilon()
 
 plt.figure(figsize=(10, 6))
-plt.hist(ranks_of_chosen[n_episodes // 2:], bins=100)
+plt.hist(ranks_of_chosen, bins=100)
 plt.xticks(np.arange(0, 101, 10))
 plt.ylim(0, 8000)
 plt.xlabel('Chosen candidate')
