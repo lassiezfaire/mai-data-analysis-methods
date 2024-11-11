@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import Any, Dict
 import numpy as np
 
-from environment import CandidateEnv
+from reinforcement_learning.environment import CandidateEnv
 
 
 class SecretaryAgent:

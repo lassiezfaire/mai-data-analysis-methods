@@ -1,3 +1,4 @@
+import numpy as np
 from gymnasium import Env, spaces
 from typing import Tuple
 
@@ -15,9 +16,7 @@ def find_key_by_value(dictionary: dict, value):
 
 
 class CandidateEnv(Env):
-    """Среда обучения - мир
-    (кандидаты в количестве num_candidates штук),
-    в котором будет действовать агент."""
+    """Среда обучения - мир (кандидаты в количестве num_candidates штук), в котором будет действовать агент."""
 
     def __init__(self, num_candidates: int):
         """
@@ -37,8 +36,9 @@ class CandidateEnv(Env):
         :return: словарь-наблюдение
         """
         return {
-            'if candidate is best so far': self.if_best_so_far,
-            'share of rejected': round(self.current_step / self.num_candidates * 100)
+            # проверка, является ли текущий кандидат лучшим
+            'if candidate is best so far': self.candidates[self.current_step] >= self.best_candidate_so_far,
+            'share of rejected': int(self.current_step / self.num_candidates * 100)
         }
 
     def _get_info(self) -> dict:
@@ -48,7 +48,7 @@ class CandidateEnv(Env):
         """
         return {
             'rank of current': find_key_by_value(
-                dictionary=self.candidates,
+                dictionary=self.candidates_dict,
                 value=self.current_candidate
             )
         }
@@ -62,16 +62,17 @@ class CandidateEnv(Env):
         """
 
         super().reset(seed=seed)
+        self.candidates_dict = generate_candidate_dict(num_candidates=self.num_candidates)
+        self.candidates = list(self.candidates_dict.values())
+        self.candidates = np.asarray(self.candidates)
 
-        self.candidates = generate_candidate_dict(num_candidates=self.num_candidates)  # список кандидатов
-        self.best_candidate = self.candidates[1]  # лучший кандидат (имеющий ранг 1)
-        print(self.candidates[1])
+        self.ranks = list(self.candidates_dict.keys())
+        self.ranks = np.asarray([int(i - 1) for i in self.ranks])
 
-        self.current_step = 0  # порядковый номер текущего кандидата в списке кандидатов, обновляется в step()
-        self.current_candidate = list(self.candidates.values())[self.current_step]  # текущий кандидат
+        self.current_step = 0  # порядковый номер текущего кандидата в списке кандидатов
+        self.current_candidate = self.candidates[self.current_step]  # текущий кандидат
 
-        self.if_best_so_far = False  # проверка, является ли текущий кандидат лучшим
-        self.best_candidate_so_far = 0  # лучший из отвергнутых кандидатов (без ранга), обновляется в step()
+        self.best_candidate_so_far = 0  # качество лучшего из просмотренных кандидата
 
         observation = self._get_obs()
         info = self._get_info()
@@ -86,25 +87,23 @@ class CandidateEnv(Env):
         :return: Кортеж из следующего наблюдения, вознаграждения, признаков завершения и дополнительной информации.
         """
 
-        self.current_candidate = list(self.candidates.values())[self.current_step]
+        self.current_candidate = self.candidates[self.current_step]
 
-        if self.best_candidate_so_far < self.current_candidate:
+        if self.candidates[self.current_step] >= self.best_candidate_so_far:
             self.best_candidate_so_far = self.current_candidate
-            self.if_best_so_far = True
 
-        if action == 1:  # выбираем кандидата
+        if action == 1:  # предложенный кандидат выбран
             terminated = True  # останавливаем процесс
-            # назначаем высокую награду за выбор лучшего кандидата
-            reward = 100 if self.current_candidate == self.best_candidate else -1
+            reward = 100 if self.ranks[self.current_step] == 0 else -1
 
         else:  # отвергаем кандидата
-            if self.current_step == len(self.candidates.values()) - 1:  # если это последний кандидат - выбираем его
+            if self.current_step == self.num_candidates - 1:  # если это последний кандидат - выбираем его
                 terminated = True
-                reward = 100 if self.current_candidate == self.best_candidate else -1
+                reward = 100 if self.ranks[self.current_step] == 0 else -1
             else:
                 terminated = False
                 reward = 0
-                # добавляем пропущенного кандидата в список пропущенных кандидатов
+                #  Прокручиваем список кандидатов
                 self.current_step += 1
 
         observation = self._get_obs()

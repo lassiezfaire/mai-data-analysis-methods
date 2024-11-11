@@ -1,36 +1,22 @@
-import random
+import matplotlib.pyplot as plt
 
+from math_solution.main import math_solution
+from reinforcement_learning.main import reinforcement_learning
 
-def candidate_dictionary(num_candidates: int, seed: int = None) -> dict:
-    """Генерируем список кандидатов, потом перемешиваем его
+num_candidates = 100
 
-    :param num_candidates: Количество кандидатов
-    :param seed:
-    :return: словарь кандидатов вида "ранг": "качество"
-    """
+# print('Прогресс математического алгоритма:')
+math_solution_results = math_solution(num_candidates=num_candidates)
 
-    random.seed(seed)
+# print('Прогресс алгоритма обучения с подкреплением:')
+reinforcement_learning_results = reinforcement_learning(num_candidates=num_candidates)
 
-    # создаём список кандидатов
-    random_candidates = set()
-    # генерируем уникальных кандидатов до тех пор, пока их не наберётся num_candidates
-    while len(random_candidates) < num_candidates:
-        random_candidates.add(random.randint(10 ** 3, 10 ** 4 - 1))
+bins = list(range(0, num_candidates + 1, 10))
 
-    random_candidates = list(random_candidates)
-    # сортируем кандидатов от лучшего к худшему, чтобы рассчитать ранги
-    random_candidates.sort(reverse=True)
-    # генерируем их ранги
-    candidates_ranks = list(range(1, num_candidates + 1))
-    # объединяем кандидатов и ранги в словарь кандидатов
-    candidates = {}
-    for i in range(num_candidates):
-        candidates[candidates_ranks[i]] = random_candidates[i]
+plt.figure(figsize=(10, 6))
 
-    # перемешаем кандидатов в случайном порядке с сохранением рангов
-    random.shuffle(candidates_ranks)
-    shuffled_candidates = {}
-    for i in range(num_candidates):
-        shuffled_candidates[candidates_ranks[i]] = candidates[candidates_ranks[i]]
-
-    return shuffled_candidates
+plt.hist(math_solution_results, bins=num_candidates, alpha=0.5, label='reinforcement learning')
+plt.hist(reinforcement_learning_results, bins=num_candidates, alpha=0.5, label='reinforcement learning')
+plt.xlabel('Chosen candidate')
+plt.ylabel('frequency')
+plt.show()
