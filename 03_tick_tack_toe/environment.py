@@ -7,6 +7,7 @@ X = ord('X')
 O = ord('O')
 EMPTY = ord('•')
 
+
 class BoardEnv(Env):
     """Среда - поле для игры в крестики-нолики, на котором играют агенты"""
 
@@ -22,12 +23,12 @@ class BoardEnv(Env):
         self.current_turn = 0
         self.row, self.col = -1, -1
 
-        self.action_space = spaces.Discrete(size * size, start=1)
+        self.action_space = spaces.Discrete(size * size)
         self.observation_space = spaces.MultiDiscrete([X, O, EMPTY] * (size * size))
 
         self.reset()
 
-    def _get_obs(self) -> np.ndarray:
+    def _get_obs(self) -> tuple:
         """Преобразуем состояние среды (environment) в наблюдение (observation).
         Эти данные подаются на обучение нейронной сети
 
@@ -37,7 +38,7 @@ class BoardEnv(Env):
         board = list(self.board.flatten())
         current_player = X if self.current_player == O else O
 
-        return np.array(board + [current_player])
+        return tuple(np.array(board + [current_player]))
 
     def _get_info(self) -> dict:
         """Диагностические данные, которые позволяют отслеживать работу нейронной сети
@@ -129,7 +130,7 @@ class BoardEnv(Env):
 
         return False
 
-    def step(self, action: int) -> Tuple[np.ndarray, int, bool, bool, dict]:
+    def step(self, action: int) -> Tuple[tuple, int, bool, bool, dict]:
         """Выполняет действие, вычисляет новое состояние среды и возвращает кортеж из следующего наблюдения,
         вознаграждения, признаков завершения и дополнительной информации.
 
@@ -137,40 +138,38 @@ class BoardEnv(Env):
         :return: Кортеж из следующего наблюдения, вознаграждения, признаков завершения и дополнительной информации.
         """
 
-        self.row, self.col = (action - 1) // self.size, (action - 1) % self.size
+        check_of_free_squares = np.any(np.isin(self.board, EMPTY))
 
-        cords_of_free_squares = [(i, j) for i in range(self.size) for j in range(self.size)
-                                  if self.board[i, j] == EMPTY]
+        self.row, self.col = action // self.size, action % self.size
 
         reward = 0
 
-        if len(cords_of_free_squares) == 0:  # Проверяем, остались ли ещё свободные клетки для хода
+        if not check_of_free_squares:  # Проверяем, остались ли ещё свободные клетки для хода
             terminated = True
             if self.check_winner(player=self.current_player):
+                self.current_turn += 1
                 reward = 100
         else:
-            if (self.row, self.col) in cords_of_free_squares:  # Проверяем, пуста ли клетка
+            if self.board[self.row, self.col] == EMPTY:  # Проверяем, пуста ли клетка
                 self.board[self.row, self.col] = self.current_player
                 if self.check_winner(player=self.current_player):
                     terminated = True
+                    self.current_turn += 1
                     reward = 100
-                elif len(cords_of_free_squares) == 0:  # Проверяем на ничью
-                    terminated = True
                 else:
                     terminated = False
+                    self.current_turn += 1
                     self.current_player = O if self.current_player == X else X  # Передаём ход другому игроку
             else:
                 terminated = False
-                self.current_player = O if self.current_player == X else X
-                reward = -100
+                reward = -1_000
 
         truncated = False
         observation = self._get_obs()
         info = self._get_info()
 
-        self.current_turn+=1
-
         return observation, reward, terminated, truncated, info
+
 
 def main():
     env = BoardEnv()
@@ -182,6 +181,7 @@ def main():
         env.print_diagnostic(_get_info_dict=info, terminated=terminated)
 
         episode_over = terminated
+
 
 if __name__ == "__main__":
     main()
