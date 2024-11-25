@@ -56,9 +56,10 @@ class BoardEnv(Env):
             'current_turn': self.current_turn
         }
 
-    def print_diagnostic(self, _get_info_dict: dict, terminated: bool):
+    def print_diagnostic(self, _get_info_dict: dict, terminated: bool, truncated: bool):
 
-        if self.row != -1 and self.col != -1:
+        if self.row != -1 and self.col != -1:  # проверка, что это не начало игры
+
             print(f'Ход #{_get_info_dict['current_turn']}', end=', ')
             print('ходит', end=' ')
             if terminated:
@@ -74,6 +75,14 @@ class BoardEnv(Env):
                 for symbol in row:
                     print(symbol, end=' ')
                 print('')
+
+            if truncated:
+                print('Ничья!')
+
+            if terminated:
+                print(f'Победа игрока {_get_info_dict['current_player']}!')
+
+            print()
         else:
             print("Игра начинается. ")
             print('Поле пусто: ')
@@ -85,9 +94,7 @@ class BoardEnv(Env):
                     print(symbol, end=' ')
                 print('')
 
-
-
-        print('Победа!' if terminated else '')
+            print()
 
     def reset(self, seed=None, options=None):
         """Инициализирует новый эпизод для среды.
@@ -151,34 +158,30 @@ class BoardEnv(Env):
         :return: Кортеж из следующего наблюдения, вознаграждения, признаков завершения и дополнительной информации.
         """
 
-        check_of_free_squares = np.any(np.isin(self.board, EMPTY))
-
         self.row, self.col = action // self.size, action % self.size
 
+        terminated = False
+        truncated = False
         reward = 0
 
-        if not check_of_free_squares:  # Проверяем, остались ли ещё свободные клетки для хода
-            terminated = True
+        if self.board[self.row, self.col] == EMPTY:  # Проверяем, пуста ли клетка
+            self.board[self.row, self.col] = self.current_player
             if self.check_winner(player=self.current_player):
+                terminated = True
                 self.current_turn += 1
-                reward = 100
-        else:
-            if self.board[self.row, self.col] == EMPTY:  # Проверяем, пуста ли клетка
-                self.board[self.row, self.col] = self.current_player
-                if self.check_winner(player=self.current_player):
-                    terminated = True
-                    self.current_turn += 1
-                    reward = 1000
-                else:
-                    terminated = False
-                    self.current_turn += 1
-                    self.current_player = O if self.current_player == X else X  # Передаём ход другому игроку
-                    reward = -1
+                reward = 1000
             else:
-                terminated = False
-                reward = -1_000
+                self.current_turn += 1
+                self.current_player = O if self.current_player == X else X  # Передаём ход другому игроку
+                reward = -1
+        else:
+            reward = -1_000
 
-        truncated = False
+        check_of_free_squares = np.any(np.isin(self.board, EMPTY))
+
+        if not check_of_free_squares:  # Проверяем, остались ли ещё свободные клетки для хода
+            truncated = True
+
         observation = self._get_obs()
         info = self._get_info()
 
@@ -192,9 +195,9 @@ def main():
     while not episode_over:
         action = env.action_space.sample()
         observation, reward, terminated, truncated, info = env.step(action)
-        env.print_diagnostic(_get_info_dict=info, terminated=terminated)
+        env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
 
-        episode_over = terminated
+        episode_over = terminated or truncated
 
 
 if __name__ == "__main__":

@@ -12,16 +12,20 @@ def bot_turn(bot: BotPlayer, obs: tuple, env: BoardEnv):
     :return:
     """
 
-    o_step_done = False
+    episode_reward = 0
+    done = False
 
-    while not o_step_done:
+    while not done:
         action = bot.get_action(obs)
         next_obs, reward, terminated, truncated, info = env.step(action)
 
-        o_step_done = True if reward >= -1 else False
+        terminated = terminated or truncated
+        episode_reward += reward
+
+        done = True if reward >= -1 else False
         bot.update(obs, action, reward, terminated, next_obs)
 
-    return terminated, next_obs, info
+    return terminated, truncated, next_obs, info, episode_reward
 
 def reinforcement_learning(
         size: int,
@@ -29,6 +33,7 @@ def reinforcement_learning(
         x_q_values_file='q_tables//x_q_table.pkl',
         o_q_values_file='q_tables//o_q_table.pkl'
 ) -> list:
+
     env = BoardEnv(size=size)
 
     # Гиперпараметры
@@ -60,33 +65,20 @@ def reinforcement_learning(
         while not done:
 
             # Ход крестик
-            x_step_done = False
-            while not x_step_done:
-                if type(x_agent) == BotPlayer:
-                    action = x_agent.get_action(obs)
-                    next_obs, reward, terminated, truncated, info = env.step(action)
-                    episode_reward += reward
-                    x_step_done = True if reward >= -1 else False
-                    x_agent.update(obs, action, reward, terminated, next_obs)
+            terminated, truncated, next_obs, info, episode_reward = bot_turn(bot=x_agent, obs=obs, env=env)
 
             # обновляем флаг завершения эпизода и текущее состояние
-            done = terminated
+            done = terminated or truncated
             obs = next_obs
 
             if done:
                 break
 
             # Ход нолик
-            o_step_done = False
-            while not o_step_done:
-                action = o_agent.get_action(obs) if type(o_agent) == BotPlayer else o_agent.get_action()
-                next_obs, reward, terminated, truncated, info = env.step(action)
-                episode_reward += reward
-                o_step_done = True if reward >= -1 else False
-                o_agent.update(obs, action, reward, terminated, next_obs)
+            terminated, truncated, next_obs, info, episode_reward = bot_turn(bot=o_agent, obs=obs, env=env)
 
             # обновляем флаг завершения эпизода и текущее состояние
-            done = terminated
+            done = terminated or truncated
             obs = next_obs
 
             # env.print_diagnostic(_get_info_dict=info, terminated=terminated)
@@ -133,7 +125,7 @@ def play_with_human(config: List, size: int):
 
     obs, info = env.reset()
 
-    env.print_diagnostic(_get_info_dict=info, terminated=False)
+    env.print_diagnostic(_get_info_dict=info, terminated=False, truncated=False)
 
     done = False
 
@@ -145,24 +137,26 @@ def play_with_human(config: List, size: int):
             done = terminated
             obs = next_obs
 
-            env.print_diagnostic(_get_info_dict=info, terminated=terminated)
+            env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
 
             if done:
                 break
 
-            terminated, next_obs, info = bot_turn(bot=bot, obs=obs, env=env)
+            terminated, truncated, next_obs, info, episode_reward = bot_turn(bot=bot, obs=obs, env=env)
 
             done = terminated
             obs = next_obs
 
-            env.print_diagnostic(_get_info_dict=info, terminated=terminated)
+
+            env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
+
         else:
-            terminated, next_obs, info = bot_turn(bot=bot, obs=obs, env=env)
+            terminated, truncated, next_obs, info, episode_reward = bot_turn(bot=bot, obs=obs, env=env)
 
             done = terminated
             obs = next_obs
 
-            env.print_diagnostic(_get_info_dict=info, terminated=terminated)
+            env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
 
             if done:
                 break
@@ -173,7 +167,7 @@ def play_with_human(config: List, size: int):
             done = terminated
             obs = next_obs
 
-            env.print_diagnostic(_get_info_dict=info, terminated=terminated)
+            env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
 
     bot.decay_epsilon()
     print('Игра окончена.')

@@ -3,9 +3,7 @@ import matplotlib.pyplot as plt
 
 from game import reinforcement_learning, play_with_human
 
-from bot import BotPlayer
-from human import HumanPlayer
-from environment import BoardEnv, X, O, EMPTY
+from environment import X, O
 
 
 def plot_learning_curve(reward, window_size = 1000):
@@ -21,16 +19,16 @@ def plot_learning_curve(reward, window_size = 1000):
     plt.show()
 
 def main():
-    rewards = reinforcement_learning(
-        size=3,
-        n_episodes=1_000_000,
-        x_q_values_file='', # q_tables//x_q_table.pkl
-        o_q_values_file='', # q_tables//o_q_table.pkl
-    )
+    # rewards = reinforcement_learning(
+    #     size=3,
+    #     n_episodes=40_000,
+    #     x_q_values_file='', # q_tables//x_q_table.pkl
+    #     o_q_values_file='', # q_tables//o_q_table.pkl
+    # )
+    #
+    # plot_learning_curve(rewards, window_size=1000)
 
-    plot_learning_curve(rewards, window_size=1000)
-
-    # play_with_human(config=[O, 'q_tables//x_q_table.pkl'], size=3)
+    play_with_human(config=[O, 'q_tables//x_q_table.pkl'], size=3)
 
 
 if __name__ == "__main__":
