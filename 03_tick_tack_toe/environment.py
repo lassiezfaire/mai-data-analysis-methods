@@ -58,21 +58,34 @@ class BoardEnv(Env):
 
     def print_diagnostic(self, _get_info_dict: dict, terminated: bool):
 
-        print(f'Ход #{_get_info_dict['current_turn'] + 1}', end=', ')
-        print('ходит', end=' ')
-        if terminated:
-            print('первый игрок' if _get_info_dict['current_player'] == 'X' else 'второй игрок,', end=' ')
+        if self.row != -1 and self.col != -1:
+            print(f'Ход #{_get_info_dict['current_turn']}', end=', ')
+            print('ходит', end=' ')
+            if terminated:
+                print('первый игрок,' if _get_info_dict['current_player'] == 'X' else 'второй игрок,', end=' ')
+            else:
+                print('первый игрок,' if _get_info_dict['current_player'] == 'O' else 'второй игрок,', end=' ')
+            print(f'ход: {(int(self.row), int(self.col))}')
+
+            print('Поле после данного хода: ')
+            human_readable_board = _get_info_dict['board']
+
+            for row in human_readable_board:
+                for symbol in row:
+                    print(symbol, end=' ')
+                print('')
         else:
-            print('первый игрок' if _get_info_dict['current_player'] == 'O' else 'второй игрок,', end=' ')
-        print(f'ход: {(int(self.row), int(self.col))}')
+            print("Игра начинается. ")
+            print('Поле пусто: ')
 
-        print('Поле после данного хода: ')
-        human_readable_board = _get_info_dict['board']
+            human_readable_board = _get_info_dict['board']
 
-        for row in human_readable_board:
-            for symbol in row:
-                print(symbol, end=' ')
-            print('')
+            for row in human_readable_board:
+                for symbol in row:
+                    print(symbol, end=' ')
+                print('')
+
+
 
         print('Победа!' if terminated else '')
 
@@ -155,11 +168,12 @@ class BoardEnv(Env):
                 if self.check_winner(player=self.current_player):
                     terminated = True
                     self.current_turn += 1
-                    reward = 100
+                    reward = 1000
                 else:
                     terminated = False
                     self.current_turn += 1
                     self.current_player = O if self.current_player == X else X  # Передаём ход другому игроку
+                    reward = -1
             else:
                 terminated = False
                 reward = -1_000

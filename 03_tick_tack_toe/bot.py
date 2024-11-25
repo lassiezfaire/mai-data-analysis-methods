@@ -6,16 +6,17 @@ import dill as pickle
 from environment import BoardEnv
 
 
-class PlayerAgent:
+class BotPlayer:
     """Агент обучения с подкреплением - игрок в крестики-нолики"""
 
     def __init__(
             self,
             env: BoardEnv,
-            learning_rate: float,
-            initial_epsilon: float,
             epsilon_decay: float,
-            final_epsilon: float,
+            learning_rate: float = 0.01,
+            initial_epsilon: float = 1.0,
+            final_epsilon: float = 0,
+            q_values_file: str = '',
             discount_factor: float = 0.95,
     ):
         """Инициализирует агента обучения с подкреплением алгоритма Q-learning.
@@ -29,7 +30,13 @@ class PlayerAgent:
         """
 
         self.env = env
-        self.q_values = defaultdict(lambda: np.zeros(env.action_space.n))
+
+        if q_values_file == '':
+            self.q_values = defaultdict(lambda: np.zeros(env.action_space.n))
+            self.read_from_file = False
+        else:
+            self.q_values = self.load_q_table(q_values_file)
+            self.read_from_file = True
 
         self.lr = learning_rate
         self.discount_factor = discount_factor
@@ -48,10 +55,13 @@ class PlayerAgent:
         :return: Действие из пространства действий.
         """
 
-        if np.random.random() < self.epsilon:
-            return self.env.action_space.sample()
-        else:
+        if self.read_from_file:
             return int(np.argmax(self.q_values[obs]))
+        else:
+            if np.random.random() < self.epsilon:
+                return self.env.action_space.sample()
+            else:
+                return int(np.argmax(self.q_values[obs]))
 
     def update(
         self,
@@ -84,10 +94,10 @@ class PlayerAgent:
     def decay_epsilon(self):
         self.epsilon = max(self.final_epsilon, self.epsilon - self.epsilon_decay)
 
-    def save_q_table(self, filename='q_table.pkl'):
+    def save_q_table(self, filename):
         with open(filename, 'wb') as file:
             pickle.dump(self.q_values, file)
 
-    def load_q_table(self, filename='q_table.pkl'):
+    def load_q_table(self, filename):
         with open(filename, 'rb') as file:
-            self.q_table = pickle.load(file)
+            return pickle.load(file)
