@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple, Union
 
 from tqdm import tqdm
 
@@ -6,10 +6,10 @@ from bot import BotPlayer
 from human import HumanPlayer
 from environment import BoardEnv, X
 
-def bot_turn(bot: BotPlayer, obs: tuple, env: BoardEnv):
-    """
+def bot_turn(bot: BotPlayer, obs: tuple, env: BoardEnv) -> Tuple[bool, bool, tuple, dict, int]:
+    """Один ход бота (включая попытки походить на уже занятые клетки)
 
-    :return:
+    :return: Кортеж из полезной для обучения информации
     """
 
     episode_reward = 0
@@ -19,11 +19,10 @@ def bot_turn(bot: BotPlayer, obs: tuple, env: BoardEnv):
         action = bot.get_action(obs)
         next_obs, reward, terminated, truncated, info = env.step(action)
 
-        terminated = terminated or truncated
         episode_reward += reward
 
         done = True if reward >= -1 else False
-        bot.update(obs, action, reward, terminated, next_obs)
+        bot.update(obs, action, reward, terminated or truncated, next_obs)
 
     return terminated, truncated, next_obs, info, episode_reward
 
@@ -33,6 +32,14 @@ def reinforcement_learning(
         x_q_values_file='q_tables//x_q_table.pkl',
         o_q_values_file='q_tables//o_q_table.pkl'
 ) -> list:
+    """Функция обучения с подкреплением
+
+    :param size: размер игрового поля
+    :param n_episodes: количество эпизодов обучения
+    :param x_q_values_file: путь к файлу сохранения q-таблицы для игрока X
+    :param o_q_values_file: путь к файлу сохранения q-таблицы для игрока O
+    :return: награды за каждый эпизод обучения
+    """
 
     env = BoardEnv(size=size)
 
@@ -81,8 +88,6 @@ def reinforcement_learning(
             done = terminated or truncated
             obs = next_obs
 
-            # env.print_diagnostic(_get_info_dict=info, terminated=terminated)
-
         rewards.append(episode_reward)
 
         x_agent.decay_epsilon()
@@ -95,12 +100,11 @@ def reinforcement_learning(
 
     return rewards
 
-def play_with_human(config: List, size: int):
-    """
+def play_with_human(config: List[Union[int, str]], size: int):
+    """Функция игры человека и машины
 
-    :param config:
-    :param size:
-    :param n_games:
+    :param config: сторона, за которую играет игрок, и путь к файлу с Q-таблицей для бота
+    :param size: размер игрового поля
     :return:
     """
 
@@ -134,7 +138,7 @@ def play_with_human(config: List, size: int):
             action = human.get_action()
             next_obs, reward, terminated, truncated, info = env.step(action)
 
-            done = terminated
+            done = terminated or truncated
             obs = next_obs
 
             env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
@@ -144,7 +148,7 @@ def play_with_human(config: List, size: int):
 
             terminated, truncated, next_obs, info, episode_reward = bot_turn(bot=bot, obs=obs, env=env)
 
-            done = terminated
+            done = terminated or truncated
             obs = next_obs
 
 
@@ -153,9 +157,10 @@ def play_with_human(config: List, size: int):
         else:
             terminated, truncated, next_obs, info, episode_reward = bot_turn(bot=bot, obs=obs, env=env)
 
-            done = terminated
+            done = terminated or truncated
             obs = next_obs
 
+            print(terminated, truncated)
             env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
 
             if done:
@@ -164,9 +169,10 @@ def play_with_human(config: List, size: int):
             action = human.get_action()
             next_obs, reward, terminated, truncated, info = env.step(action)
 
-            done = terminated
+            done = terminated or truncated
             obs = next_obs
 
+            print(terminated, truncated)
             env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
 
     bot.decay_epsilon()

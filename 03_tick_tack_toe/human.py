@@ -1,4 +1,5 @@
 class HumanPlayer:
+    """Человек-игрок в крестики нолики"""
 
     def __init__(
             self,
@@ -7,7 +8,12 @@ class HumanPlayer:
 
         self.size = size
 
-    def get_action(self):
+    def get_action(self) -> int:
+        """Аналог функции get_action бота, но для человека
+
+        :return: action, как из action_space
+        """
+
         correct = False
         while not correct:
             row_col_str = input("Введите координаты хода (строка колонка): ")

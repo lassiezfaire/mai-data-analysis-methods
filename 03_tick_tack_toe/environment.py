@@ -32,7 +32,7 @@ class BoardEnv(Env):
         """Преобразуем состояние среды (environment) в наблюдение (observation).
         Эти данные подаются на обучение нейронной сети
 
-        :return: массив-наблюдение
+        :return: кортеж-наблюдение
         """
 
         board = list(self.board.flatten())
@@ -43,7 +43,7 @@ class BoardEnv(Env):
     def _get_info(self) -> dict:
         """Диагностические данные, которые позволяют отслеживать работу нейронной сети
 
-        :return: массив диагностической информации
+        :return: словарь диагностической информации
         """
         vectorized_chr = np.vectorize(chr)
         human_readable_board = vectorized_chr(self.board)
@@ -57,6 +57,13 @@ class BoardEnv(Env):
         }
 
     def print_diagnostic(self, _get_info_dict: dict, terminated: bool, truncated: bool):
+        """Функция человеко-читаемого вывода поля (и консольный интерфейс для игры человека и обученного бота)
+
+        :param _get_info_dict: словарь диагностической информации
+        :param terminated: победил ли кто-нибудь
+        :param truncated: ничья ли
+        :return:
+        """
 
         if self.row != -1 and self.col != -1:  # проверка, что это не начало игры
 
@@ -186,19 +193,3 @@ class BoardEnv(Env):
         info = self._get_info()
 
         return observation, reward, terminated, truncated, info
-
-
-def main():
-    env = BoardEnv()
-
-    episode_over = False
-    while not episode_over:
-        action = env.action_space.sample()
-        observation, reward, terminated, truncated, info = env.step(action)
-        env.print_diagnostic(_get_info_dict=info, terminated=terminated, truncated=truncated)
-
-        episode_over = terminated or truncated
-
-
-if __name__ == "__main__":
-    main()

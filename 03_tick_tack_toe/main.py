@@ -21,7 +21,7 @@ def plot_learning_curve(reward, window_size = 1000):
 def main():
     # rewards = reinforcement_learning(
     #     size=3,
-    #     n_episodes=40_000,
+    #     n_episodes=500_000,
     #     x_q_values_file='', # q_tables//x_q_table.pkl
     #     o_q_values_file='', # q_tables//o_q_table.pkl
     # )

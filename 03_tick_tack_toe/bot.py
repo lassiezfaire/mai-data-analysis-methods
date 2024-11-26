@@ -95,9 +95,19 @@ class BotPlayer:
         self.epsilon = max(self.final_epsilon, self.epsilon - self.epsilon_decay)
 
     def save_q_table(self, filename):
+        """Сохранение Q-таблицы в файл
+
+        :param filename: путь к файлу
+        :return:
+        """
         with open(filename, 'wb') as file:
             pickle.dump(self.q_values, file)
 
     def load_q_table(self, filename):
+        """Чтение Q-таблицы из файла
+
+        :param filename: путь к файлу
+        :return:
+        """
         with open(filename, 'rb') as file:
             return pickle.load(file)
