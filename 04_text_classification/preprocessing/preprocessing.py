@@ -1,15 +1,18 @@
-import pickle as pk
 import os
 import re
 
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 
-from keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.preprocessing.text import Tokenizer
-from keras.utils import to_categorical
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk import pos_tag
+from nltk.corpus import stopwords, wordnet
+from nltk.stem import WordNetLemmatizer
 
-pd.set_option('display.max_columns', None)
+nltk.download("stopwords")
+nltk.download('punkt_tab')
+nltk.download('averaged_perceptron_tagger_eng')
+nltk.download('wordnet')
 
 def num_classes(filepath: str) -> int:
     """ Функция, определяющая количество классов
@@ -23,50 +26,60 @@ def num_classes(filepath: str) -> int:
         count += 1
       return count
 
+def get_wordnet_pos (tag):
+    if tag.startswith('J'):
+        return wordnet.ADJ
+    elif tag.startswith('V'):
+        return wordnet.VERB
+    elif tag.startswith('N'):
+        return wordnet.NOUN
+    elif tag.startswith('R'):
+        return wordnet.ADV
+    else:
+        return wordnet.NOUN
+
+def lemmatize(word_list):
+    wl = WordNetLemmatizer()
+    word_pos_tags = pos_tag(word_list)
+    lemmatized_list = []
+    for tag in word_pos_tags:
+        lemmatize_word = wl.lemmatize(tag[0],get_wordnet_pos(tag[1]))
+        lemmatized_list.append(lemmatize_word)
+    return " ".join(lemmatized_list)
+
 def clean_text(text):
-    # Приведение к нижнему регистру
     text = text.lower()
-    # Удаление специальных символов и цифр
     text = re.sub(r'[^a-z\s]', '', text)
+
+    word_tokens = word_tokenize(text)
+    stop_words = stopwords.words('english')
+    text_tokens = [word for word in word_tokens if (len(word) > 2) and (word not in stop_words)]
+
+    text = lemmatize(text_tokens)
     return text
 
-class DataFrame:
-    def __init__(self, csv_path: str, tokenizer: Tokenizer, max_length, num_classes: int):
-        """Класс, осуществляющий первичную предобработку данных для дальнейшего обучения
+def preprocessing(csv_name: str, clean_csv_name: str, path_to_data: str = 'data') -> tuple[pd.Series, pd.Series]:
+    df = pd.read_csv(os.path.join(path_to_data, csv_name), names=['Class', 'Title', 'Text'])
 
-        :param csv_path: путь к csv-файлу с данными
-        :param tokenizer: токенизатор
-        :param max_length: максимальная длина текста, предназначенного для токенизации
-        :param num_classes: количество классов в датасете
-        """
+    csv_path = os.path.join(path_to_data, clean_csv_name)
 
-        self.df = pd.read_csv(csv_path, names=['Class', 'Title', 'Text'])
+    if os.path.isfile(csv_path):
+        df = pd.read_csv(csv_path, names=['Class', 'Title', 'Text'])
+    else:
+        df['Text'] = df['Text'].apply(clean_text)
+        df.to_csv(csv_path, header=False, index=False)
 
-        # очищаем текст
-        self.df['Text'] = self.df['Text'].apply(clean_text)
+    print(df.head(5))
 
-        # кодировка классов
-        label_encoder = LabelEncoder()
-        self.df['Class'] = label_encoder.fit_transform(self.df['Class'])
+    X = df['Text']
+    y = df['Class']
 
-        # Преобразование меток в one-hot encoding
-        # self.df['Class'] = to_categorical(self.df['Class'], num_classes=num_classes)
-        self.df_labels = to_categorical(self.df['Class'], num_classes=num_classes)
+    return X, y
 
-        # Перемешиваем
-        self.df = self.df.sample(frac=1, random_state=43).reset_index(drop=True)
+X_train, y_train = preprocessing(csv_name='train.csv', clean_csv_name='clean_train.csv', path_to_data='..\\data')
+X_test, y_test = preprocessing(csv_name='test.csv', clean_csv_name='clean_test.csv', path_to_data='..\\data')
 
-        # Токенизируем
-        self.tokenizer = tokenizer
-        self.tokenizer.fit_on_texts(self.df['Text'])
-        self.sequences = tokenizer.texts_to_sequences(self.df['Text'])
-
-        with open(os.path.join('data', 'tokenizer_m1.pickle'), 'wb') as handle:
-            pk.dump(self.tokenizer, handle, protocol=pk.HIGHEST_PROTOCOL)
-
-        word_index = self.tokenizer.word_index
-        print('Found %s unique tokens. ' % len(word_index))
-
-        # паддинг
-        self.df_padded = pad_sequences(self.sequences, maxlen=max_length, padding='post')
-        print('Data Shape: {}'.format(self.df_padded.shape))
+print("X_train:", X_train.shape)
+print("X_test:", X_test.shape)
+print("y_train:", y_train.shape)
+print("y_test:", y_test.shape)

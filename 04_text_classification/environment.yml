@@ -1,4 +1,4 @@
-name: 03_tick_tack_toe
+name: 04_text_classification
 dependencies:
   - python=3.12.7
   - pip
