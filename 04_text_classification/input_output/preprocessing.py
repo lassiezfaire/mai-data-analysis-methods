@@ -8,6 +8,7 @@ from nltk.tokenize import word_tokenize
 from nltk import pos_tag
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
+from keras import utils
 
 nltk.download("stopwords")
 nltk.download('punkt_tab')
@@ -58,7 +59,8 @@ def clean_text(text):
     text = lemmatize(text_tokens)
     return text
 
-def preprocessing(csv_name: str, clean_csv_name: str, path_to_data: str = 'data') -> tuple[pd.Series, pd.Series]:
+def preprocessing(csv_name: str, clean_csv_name: str, num_classes: int, path_to_data: str = 'data') \
+        -> tuple[pd.Series, pd.Series]:
     df = pd.read_csv(os.path.join(path_to_data, csv_name), names=['Class', 'Title', 'Text'])
 
     csv_path = os.path.join(path_to_data, clean_csv_name)
@@ -69,17 +71,8 @@ def preprocessing(csv_name: str, clean_csv_name: str, path_to_data: str = 'data'
         df['Text'] = df['Text'].apply(clean_text)
         df.to_csv(csv_path, header=False, index=False)
 
-    print(df.head(5))
-
     X = df['Text']
-    y = df['Class']
+    y = df['Class'] - 1
+    y = utils.to_categorical(y, num_classes=num_classes)
 
     return X, y
-
-X_train, y_train = preprocessing(csv_name='train.csv', clean_csv_name='clean_train.csv', path_to_data='..\\data')
-X_test, y_test = preprocessing(csv_name='test.csv', clean_csv_name='clean_test.csv', path_to_data='..\\data')
-
-print("X_train:", X_train.shape)
-print("X_test:", X_test.shape)
-print("y_train:", y_train.shape)
-print("y_test:", y_test.shape)
