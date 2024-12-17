@@ -22,8 +22,8 @@ X_train_token = tokenizer.texts_to_sequences(X_train)
 X_test_token = tokenizer.texts_to_sequences(X_test)
 
 sequence_len = 50
-X_train_token = pad_sequences(X_train_token, padding='post', maxlen=sequence_len)
-X_test_token = pad_sequences(X_test_token, padding='post', maxlen=sequence_len)
+X_train_token = pad_sequences(X_train_token, maxlen=sequence_len)
+X_test_token = pad_sequences(X_test_token, maxlen=sequence_len)
 
 early_stopping = callbacks.EarlyStopping(monitor='val_loss', patience=2, restore_best_weights=True)
 
@@ -40,7 +40,7 @@ plot_acc_loss(ccn_history, 'loss', loss, cnn_model.__name__)
 lstm_model = LSTMModel(vocab_size=vocab_size, sequence_len=sequence_len, num_classes=num_classes)
 lstm_history = lstm_model.fit(X_train_token, y_train, epochs=20, batch_size=32, validation_split=0.2,
                               callbacks=[early_stopping])
-loss, acc = lstm_history.evaluate(X_test_token, y_test, verbose=1)
+loss, acc = lstm_model.evaluate(X_test_token, y_test, verbose=1)
 
 print(f'LSTM Model - Loss: {loss:.4f}, Accuracy: {acc:.4f}%')
 
@@ -50,7 +50,7 @@ plot_acc_loss(lstm_history, 'loss', loss, lstm_model.__name__)
 gru_model = GRUModel(vocab_size=vocab_size, sequence_len=sequence_len, num_classes=num_classes)
 gru_history = gru_model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2,
                             callbacks=[early_stopping])
-loss, acc = lstm_history.evaluate(X_test_token, y_test, verbose=1)
+loss, acc = gru_model.evaluate(X_test_token, y_test, verbose=1)
 
 print(f'GRU Model - Loss: {loss:.4f}, Accuracy: {acc:.4f}%')
 
