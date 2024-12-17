@@ -13,7 +13,8 @@
 - для тестирования: https://github.com/mhjabreel/CharCnn_Keras/raw/master/data/ag_news_csv/test.csv
 - имена классов: https://raw.githubusercontent.com/mhjabreel/CharCnn_Keras/master/data/ag_news_csv/classes.txt
 
-![[images/CNN_acc.png]] ![[[images/CNN_loss]]
-![[images/LSTM_acc.png]] ![[[images/LSTM_loss]]
-![[images/GRU_acc.png]] ![[[images/GRU_loss]]
+![img](images/CNN_acc.png) ![img](images/CNN_loss.png)
+![img](images/LSTM_acc.png) ![img](images/LSTM_loss.png)
+![img](images/GRU_acc.png) ![img](images/GRU_loss.png)
+
 
